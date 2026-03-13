@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Warszawa Transport - Pro Dashboard</title>
+    <title>Warszawa Transport - Live Dashboard</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
@@ -13,65 +13,57 @@
         }
         body { margin: 0; font-family: 'Segoe UI', Arial, sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; background: var(--bg); }
         
-        /* Layout */
         #map { flex: 7; width: 100%; border-bottom: 4px solid #ccc; }
         #data-panel { flex: 3; width: 100%; overflow-y: auto; background: white; }
 
-        /* Panel Sterowania */
         .control-panel {
             position: absolute; 
-            top: 25px; 
-            right: 25px; 
+            top: 20px; 
+            right: 20px; 
             z-index: 1000;
             background: rgba(255, 255, 255, 0.95); 
-            padding: 25px; 
-            border-radius: 15px;
-            box-shadow: 0 8px 30px rgba(0,0,0,0.3); 
-            width: 320px; 
+            padding: 20px; 
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2); 
+            width: 280px; 
             border: 1px solid #ddd;
         }
 
-        h2 { margin: 0 0 20px 0; font-size: 22px; color: #1a1a1a; }
+        h2 { margin: 0 0 15px 0; font-size: 20px; color: #1a1a1a; }
 
         .carrier-item { 
             display: flex; 
             align-items: center; 
-            margin-bottom: 15px; 
-            font-size: 18px; 
+            margin-bottom: 12px; 
+            font-size: 16px; 
             font-weight: 600; 
             cursor: pointer;
-            padding: 10px;
-            border-radius: 8px;
-            transition: background 0.2s;
         }
-        .carrier-item:hover { background: #f0f0f0; }
 
         .carrier-item input { 
-            margin-right: 15px; 
-            transform: scale(1.8); 
-            cursor: pointer; 
+            margin-right: 12px; 
+            transform: scale(1.5); 
         }
 
-        .dot { width: 14px; height: 14px; border-radius: 50%; display: inline-block; margin-right: 12px; }
+        .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; margin-right: 10px; }
 
-        /* Tabela */
-        table { width: 100%; border-collapse: collapse; font-size: 15px; text-align: left; }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; text-align: left; }
         thead { background: #222; color: white; position: sticky; top: 0; z-index: 10; }
-        th, td { padding: 12px 20px; border-bottom: 1px solid #eee; }
+        th, td { padding: 10px 15px; border-bottom: 1px solid #eee; }
         tr:hover { background-color: #f1f1f1; cursor: pointer; }
         
-        .badge { padding: 5px 10px; border-radius: 5px; font-weight: bold; font-size: 12px; color: white; text-transform: uppercase; }
+        .badge { padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 11px; color: white; text-transform: uppercase; }
         
         #status-bar { 
-            font-size: 13px; 
+            font-size: 12px; 
             color: #555; 
-            margin-top: 20px; 
-            border-top: 2px solid #eee; 
-            padding-top: 15px;
+            margin-top: 15px; 
+            border-top: 1px solid #eee; 
+            padding-top: 10px;
             display: flex;
             justify-content: space-between;
         }
-        .demo-tag { color: #856404; background: #fff3cd; padding: 3px 8px; border-radius: 4px; font-weight: bold; }
+        .demo-tag { color: #856404; background: #fff3cd; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -137,18 +129,12 @@
         pks: { name: 'PKS Grodzisk', color: '#9b59b6' }
     };
 
-    // --- POPRAWIONA IDENTYFIKACJA ---
     function identifyCarrier(nr) {
         const sNr = nr.toString();
-        // MZA: 1000-8999
         if (/^[1-8]\d{3}$/.test(sNr)) return 'mza';
-        // MOBILIS: 92xx, 94xx, 95xx, 98xx
         if (/^(92|94|95|98)\d{2}$/.test(sNr)) return 'mobilis';
-        // RELOBUS: 97xx, 99xx
-        if (/^(90|99)\d{2}$/.test(sNr)) return 'relobus';
-        // PKS GRODZISK: 90xx, 93xx, 96xx (Poprawione 93)
-        if (/^(93)\d{2}$/.test(sNr)) return 'pks';
-        
+        if (/^(97|99)\d{2}$/.test(sNr)) return 'relobus';
+        if (/^(90|93|96)\d{2}$/.test(sNr)) return 'pks'; // 93 przypisane do PKS
         return null;
     }
 
@@ -156,10 +142,8 @@
         const demo = [];
         const lines = ['180', '503', '116', '523', '190', '709'];
         const types = ['mza', 'mobilis', 'relobus', 'pks'];
-        
-        for(let i=0; i<40; i++) {
+        for(let i=0; i<20; i++) {
             const type = types[i % 4];
-            // Poprawione bazy dla trybu DEMO
             const baseNr = {mza:'54', mobilis:'92', relobus:'99', pks:'93'}[type];
             demo.push({
                 VehicleNumber: baseNr + (10 + i),
@@ -174,14 +158,23 @@
 
     async function updateData() {
         let buses = [];
+        // Używamy corsproxy.io aby ominąć blokady CORS na GitHubie
+        const apiUrl = `https://api.um.warszawa.pl/api/action/busestrams_get/?resource_id=f2e5503e-927d-4ad3-9500-4ab9e55deb59&apikey=${API_KEY}&type=1`;
+        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(apiUrl)}`;
+
         try {
-            if (API_KEY === 'TWÓJ_KLUCZ_API') throw new Error("demo");
-            const res = await fetch(`https://api.um.warszawa.pl/api/action/busestrams_get/?resource_id=f2e5503e-927d-4ad3-9500-4ab9e55deb59&apikey=${API_KEY}&type=1`);
+            const res = await fetch(proxyUrl);
+            if (!res.ok) throw new Error("Błąd sieci");
             const data = await res.json();
-            if (data.error || !data.result || data.result.length === 0) throw new Error("demo");
-            buses = data.result;
-            document.getElementById('status-text').innerText = "LIVE";
+            
+            if (data.result && Array.isArray(data.result) && data.result.length > 0) {
+                buses = data.result;
+                document.getElementById('status-text').innerText = "LIVE";
+            } else {
+                throw new Error("Brak aktywnych pojazdów");
+            }
         } catch (e) {
+            console.warn("Przełączanie na DEMO:", e.message);
             buses = getDemoData();
             document.getElementById('status-text').innerHTML = '<span class="demo-tag">DEMO</span>';
         }
@@ -204,32 +197,29 @@
                 const carrier = CARRIERS[carrierId];
                 const pos = [bus.Lat, bus.Lon];
 
-                // Mapa
                 if (markers[bus.VehicleNumber]) {
                     markers[bus.VehicleNumber].setLatLng(pos);
                 } else {
                     markers[bus.VehicleNumber] = L.circleMarker(pos, {
-                        radius: 8, fillColor: carrier.color, color: '#fff', weight: 2, fillOpacity: 0.9
+                        radius: 7, fillColor: carrier.color, color: '#fff', weight: 2, fillOpacity: 0.9
                     }).addTo(map).bindPopup(`<b>Linia ${bus.Lines}</b><br>${carrier.name}<br>Nr: ${bus.VehicleNumber}`);
                 }
 
-                // Tabela
                 const row = tableBody.insertRow();
                 row.innerHTML = `
-                    <td><b style="font-size:16px">${bus.Lines}</b></td>
+                    <td><b>${bus.Lines}</b></td>
                     <td>#${bus.VehicleNumber}</td>
                     <td><span class="badge" style="background:${carrier.color}">${carrier.name}</span></td>
                     <td style="color:#666">${parseFloat(bus.Lat).toFixed(3)}, ${parseFloat(bus.Lon).toFixed(3)}</td>
-                    <td>${bus.Time.split(' ')[1] || bus.Time}</td>
+                    <td>${bus.Time.includes(' ') ? bus.Time.split(' ')[1] : bus.Time}</td>
                 `;
                 row.onclick = () => {
-                    map.setView(pos, 16);
+                    map.setView(pos, 15);
                     markers[bus.VehicleNumber].openPopup();
                 };
             }
         });
 
-        // Usuwanie nieaktywnych pojazdów
         Object.keys(markers).forEach(id => {
             if (!currentIds.has(id)) {
                 map.removeLayer(markers[id]);
@@ -240,11 +230,8 @@
         document.getElementById('update-timer').innerText = new Date().toLocaleTimeString();
     }
 
-    // Odświeżanie co 10 sekund
-    setInterval(updateData, 10000);
+    setInterval(updateData, 15000); // Odświeżanie co 15 sekund
     updateData();
-    
-    // Obsługa filtrów
     document.querySelectorAll('input').forEach(i => i.onchange = updateData);
 </script>
 </body>
